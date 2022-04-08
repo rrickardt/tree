@@ -1,0 +1,78 @@
+# This workflow will build and push a new container image to Amazon ECR,
+# and then will deploy to EKS cluster, when there is a push to the main branch.
+#
+
+name: Deploy to Amazon EKS
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: eu-central-1                   # set this to your preferred AWS region, e.g. us-west-1
+  ECR_REPOSITORY: tree-app-repo              # set this to your Amazon ECR repository name
+  EKS_CLUSTER_NAME: tree-cluster             # set this to cluster-name you want deploy to 
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+
+      run: |
+        # Build a docker container and
+        # push it to ECR so that it can
+        # be deployed to ECS.
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+    - name: Setup kubeconfig
+      id: setup-kubeconfig
+      run: |
+        aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
+
+    - name: Deploy k8s yaml
+      id: deploy-k8s-yaml
+      env:
+        K8S_YAML_DIR: ./manifests
+        IMAGE_NAME: ${{ steps.build-image.outputs.image }}
+      run: |
+        # Setup kustomize
+        cd $K8S_YAML_DIR
+        wget -q https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.5.4/kustomize_v4.5.4_linux_amd64.tar.gz -O kustomize.tar.gz 
+        tar xzf kustomize.tar.gz
+        chmod u+x ./kustomize
+        ./kustomize edit set image latest-tree=$IMAGE_NAME
+        ./kustomize build . | kubectl apply -f -
+        # Verify deployment
+        kubectl rollout status deployment/tree
+        # List Public IP of cluster
+        kubectl get services -o wide
+        kubectl get ingress
+
