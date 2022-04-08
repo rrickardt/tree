@@ -3,15 +3,10 @@
 
 eksctl utils associate-iam-oidc-provider --cluster tree-cluster --approve
 
-curl -o iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.4.0/docs/install/iam_policy.json
-aws iam create-policy \
-   --policy-name AWSLoadBalancerControllerIAMPolicy \
-   --policy-document file://iam_policy.json
-
-#cleanup from previous run when cluster is not in vanilla condition
-kubectl delete role aws-load-balancer-controller-leader-election-role -n kube-system
-kubectl delete rolebinding aws-load-balancer-controller-leader-election-rolebinding -n kube-system
-kubectl delete service aws-load-balancer-webhook-service -n kube-system
+#curl -o iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.4.0/docs/install/iam_policy.json
+#aws iam create-policy \
+#   --policy-name AWSLoadBalancerControllerIAMPolicy \
+#   --policy-document file://iam_policy.json
 
 eksctl delete iamserviceaccount --name=aws-load-balancer-controller --cluster=tree-cluster --namespace=kube-system 
 
