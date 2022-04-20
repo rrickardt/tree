@@ -1,7 +1,9 @@
 from flask import Flask
 from waitress import serve
+from prometheus_flask_exporter import PrometheusMetrics
 
 server = Flask(__name__)
+metrics = PrometheusMetrics(server)
 
 @server.route("/tree")
 def app():
